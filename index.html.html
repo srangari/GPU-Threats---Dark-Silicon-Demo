@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Security Demo — Dark Silicon</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;500;600;700;800&display=swap');
+
+  :root {
+    --bg: #080C10;
+    --bg2: #0D1117;
+    --bg3: #161B22;
+    --border: #21262D;
+    --border2: #30363D;
+    --text: #E6EDF3;
+    --text2: #8B949E;
+    --text3: #484F58;
+    --green: #3FB950;
+    --green-dim: #1A3A1E;
+    --red: #F85149;
+    --red-dim: #3D1A1A;
+    --orange: #E3A342;
+    --orange-dim: #3D2A0A;
+    --blue: #58A6FF;
+    --blue-dim: #0D2240;
+    --purple: #BC8CFF;
+    --yellow: #F0C05A;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 2s infinite; }
+  .topbar-title { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text); }
+  .topbar-sub { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+  .progress-wrap { display: flex; align-items: center; gap: 10px; }
+  .step-dots { display: flex; gap: 6px; }
+  .step-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); transition: all .3s; }
+  .step-dot.active { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
+  .step-dot.done { background: var(--green); }
+  .step-label { font-size: 11px; color: var(--text2); font-family: 'JetBrains Mono', monospace; }
+
+  /* MAIN */
+  .main { flex: 1; display: flex; overflow: hidden; }
+
+  /* LEFT PANEL — story */
+  .story-panel {
+    width: 340px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+    overflow-y: auto;
+  }
+  .act-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 20px;
+    width: fit-content;
+  }
+  .act-badge.act1 { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange); }
+  .act-badge.act2 { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); }
+  .story-title { font-size: 18px; font-weight: 700; line-height: 1.35; color: var(--text); font-family: 'JetBrains Mono', monospace; letter-spacing: -.01em; }
+  .story-body { font-size: 13px; color: var(--text2); line-height: 1.7; font-family: 'JetBrains Mono', monospace; }
+  .story-body strong { color: var(--text); font-weight: 600; }
+
+  .step-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    transition: all .3s;
+    opacity: .4;
+  }
+  .step-item.active { opacity: 1; border-color: var(--blue); background: #0D1B2A; }
+  .step-item.done { opacity: .7; border-color: var(--green-dim); }
+  .step-item.danger { border-color: var(--red); background: var(--red-dim); opacity: 1; }
+  .step-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--border2); color: var(--text2);
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-family: 'JetBrains Mono', monospace;
+  }
+  .step-item.active .step-num { background: var(--blue); color: #000; }
+  .step-item.done .step-num { background: var(--green); color: #000; }
+  .step-item.danger .step-num { background: var(--red); color: #fff; }
+  .step-text { font-size: 11px; color: var(--text2); line-height: 1.5; font-family: 'JetBrains Mono', monospace; }
+  .step-text strong { color: var(--text); }
+
+  /* RIGHT PANEL — visualization */
+  .viz-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 14px;
+    overflow: hidden;
+  }
+
+  /* GPU MONITOR */
+  .monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .monitor-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .monitor-card.alert-card { border-color: var(--red); background: var(--red-dim); }
+  .monitor-card.warn-card { border-color: var(--orange); background: var(--orange-dim); }
+  .mc-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
+  .mc-val { font-size: 28px; font-weight: 800; color: var(--text); font-family: 'JetBrains Mono', monospace; line-height: 1; }
+  .mc-val.green { color: var(--green); }
+  .mc-val.red { color: var(--red); }
+  .mc-val.orange { color: var(--orange); }
+  .mc-sub { font-size: 11px; color: var(--text3); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+  /* UTILIZATION BAR */
+  .util-bar-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .util-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .util-bar-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+  .util-bar-pct { font-size: 20px; font-weight: 800; font-family: 'JetBrains Mono', monospace; transition: color .5s; }
+  .util-track { height: 12px; background: var(--border); border-radius: 6px; overflow: hidden; position: relative; }
+  .util-fill { height: 100%; border-radius: 6px; transition: width 1s ease, background .5s; }
+  .util-fill.safe { background: linear-gradient(90deg, #1A5C2A, var(--green)); }
+  .util-fill.warn { background: linear-gradient(90deg, #6B4A00, var(--orange)); }
+  .util-fill.danger { background: linear-gradient(90deg, #6B1010, var(--red)); box-shadow: 0 0 12px var(--red); }
+
+  /* PROCESS TABLE */
+  .process-table { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .pt-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; padding: 8px 16px; background: var(--bg3); border-bottom: 1px solid var(--border); }
+  .pt-col { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+  .pt-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; padding: 10px 16px; border-bottom: 1px solid var(--border); transition: all .4s; }
+  .pt-row:last-child { border-bottom: none; }
+  .pt-row.rogue { background: var(--red-dim); animation: rowAppear .5s ease; }
+  .pt-cell { font-size: 12px; color: var(--text2); font-family: 'JetBrains Mono', monospace; }
+  .pt-cell.normal { color: var(--green); }
+  .pt-cell.rogue-cell { color: var(--red); }
+  .pt-cell.dim { color: var(--text3); }
+
+  /* MEMORY MAP */
+  .mem-map-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; flex: 1; }
+  .mem-map-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .mem-map-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+  .mem-legend { display: flex; gap: 14px; }
+  .mem-leg-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+  .mem-leg-dot { width: 8px; height: 8px; border-radius: 2px; }
+  .mem-grid { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; }
+  .mem-cell {
+    aspect-ratio: 1;
+    border-radius: 3px;
+    background: var(--border);
+    transition: all .3s;
+  }
+  .mem-cell.workload-a { background: var(--blue); opacity: .8; }
+  .mem-cell.workload-b { background: var(--purple); opacity: .8; }
+  .mem-cell.free { background: var(--border); }
+  .mem-cell.snooping { background: var(--red); box-shadow: 0 0 6px var(--red); animation: snoop .8s infinite alternate; }
+  .mem-cell.stolen { background: var(--orange); }
+
+  /* ALERT PANEL */
+  .alert-panel {
+    background: var(--red-dim);
+    border: 1px solid var(--red);
+    border-radius: 10px;
+    padding: 16px;
+    display: none;
+    animation: alertSlide .4s ease;
+  }
+  .alert-panel.show { display: block; }
+  .alert-title { font-size: 14px; font-weight: 700; color: var(--red); display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .alert-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .alert-row { display: flex; flex-direction: column; gap: 2px; }
+  .alert-key { font-size: 10px; color: var(--text3); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
+  .alert-val { font-size: 12px; color: var(--text); font-family: 'JetBrains Mono', monospace; }
+  .alert-val.red { color: var(--red); }
+  .alert-action { margin-top: 12px; padding: 8px 12px; background: rgba(248,81,73,.15); border-radius: 6px; font-size: 12px; color: var(--orange); font-family: 'JetBrains Mono', monospace; }
+
+  /* CPU BLIND PANEL */
+  .cpu-blind {
+    background: var(--bg2);
+    border: 1px solid var(--green);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: none;
+  }
+  .cpu-blind.show { display: block; }
+  .cpu-blind-title { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .1em; font-family: 'JetBrains Mono', monospace; margin-bottom: 8px; }
+  .cpu-blind-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+  .cpu-blind-row:last-child { border-bottom: none; }
+  .cpu-key { color: var(--text2); }
+  .cpu-val { color: var(--green); }
+
+  /* BOTTOM NAV */
+  .bottom-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 28px;
+    border-top: 1px solid var(--border);
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+  .nav-context { font-size: 12px; color: var(--text2); font-family: 'JetBrains Mono', monospace; }
+  .nav-context strong { color: var(--text); }
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Syne', sans-serif;
+    cursor: pointer;
+    border: none;
+    transition: all .2s;
+    letter-spacing: .04em;
+  }
+  .btn-next { background: var(--blue); color: #000; }
+  .btn-next:hover { background: #79BFFF; transform: translateY(-1px); }
+  .btn-next:disabled { background: var(--border2); color: var(--text3); cursor: default; transform: none; }
+  .btn-prev { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+  .btn-prev:hover { border-color: var(--text2); color: var(--text); }
+  .btn-prev:disabled { opacity: .3; cursor: default; }
+  .btn-reset { background: transparent; color: var(--text3); border: 1px solid var(--border); font-size: 11px; padding: 6px 14px; }
+  .btn-reset:hover { color: var(--text2); border-color: var(--text3); }
+
+  /* ANIMATIONS */
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+  @keyframes rowAppear { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes alertSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes snoop { from { opacity: .6; } to { opacity: 1; box-shadow: 0 0 10px var(--red); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .fade-in { animation: fadeIn .5s ease; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-dot"></div>
+    <div>
+      <div class="topbar-title">GPU Security Demo — Dark Silicon</div>
+      <div class="topbar-sub">FIRSTCON26 · Live threat simulation</div>
+    </div>
+  </div>
+  <div class="progress-wrap">
+    <div class="step-dots" id="stepDots"></div>
+    <div class="step-label" id="stepLabel">Step 1 of 8</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT — story panel -->
+  <div class="story-panel" id="storyPanel"></div>
+
+  <!-- RIGHT — viz panel -->
+  <div class="viz-panel" id="vizPanel"></div>
+
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <button class="nav-btn btn-prev" id="prevBtn" onclick="navigate(-1)" disabled>← Back</button>
+  <div class="nav-context" id="navContext"></div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="nav-btn btn-reset" onclick="reset()">↺ Reset</button>
+    <button class="nav-btn btn-next" id="nextBtn" onclick="navigate(1)">Next →</button>
+  </div>
+</div>
+
+<script>
+const STEPS = [
+  // ── ACT 1: CRYPTOMINING ──────────────────────────────────────────
+  {
+    act: 1,
+    storyTitle: "Your AI server — a normal day",
+    storyBody: "An <strong>AI inference server</strong> is running normally. One authorized job. GPU utilization steady. Nothing unusual.",
+    steps: [
+      { text: "AI inference job running", active: true },
+      { text: "GPU at 63% — expected", active: false },
+      { text: "Memory allocation normal", active: false }
+    ],
+    context: "Act 1 of 2 — Cryptomining attack",
+    nextLabel: "Attacker scans the internet →",
+    viz: "normal"
+  },
+  {
+    act: 1,
+    storyTitle: "Attacker finds an open door",
+    storyBody: "The attacker scans the internet for AI servers running <strong>Ray framework</strong> — no authentication required. <strong>Thousands of servers are exposed.</strong> Yours is one of them.",
+    steps: [
+      { text: "AI inference job running", done: true },
+      { text: "Attacker finds exposed Ray dashboard", active: true, danger: false },
+      { text: "No password. No check. Walks straight in.", active: false }
+    ],
+    context: "CVE-2023-48022 — missing authentication",
+    nextLabel: "Cryptominer installs →",
+    viz: "scanning"
+  },
+  {
+    act: 1,
+    storyTitle: "Cryptominer installs silently",
+    storyBody: "The attacker submits a job to your cluster. A <strong>cryptocurrency miner</strong> starts running inside your GPU memory — disguised as a normal system process named <strong>kworker/u8:2</strong>.",
+    steps: [
+      { text: "AI inference job running", done: true },
+      { text: "Attacker walks in through open door", done: true },
+      { text: "kworker/u8:2 appears in GPU memory", active: true, danger: true },
+      { text: "GPU utilization climbing...", active: false }
+    ],
+    context: "Rogue process disguised as system task",
+    nextLabel: "Watch GPU drain →",
+    viz: "miner_appears"
+  },
+  {
+    act: 1,
+    storyTitle: "GPU hijacked — CPU shows nothing",
+    storyBody: "GPU utilization climbs to <strong>94%</strong>. Your legitimate AI job is being starved of resources. <strong>The CPU-side security tools show a completely clean process list.</strong> No alerts. No logs.",
+    steps: [
+      { text: "Cryptominer consuming 31% GPU", done: true },
+      { text: "AI job degraded — responses slowing", active: true, danger: true },
+      { text: "CPU logs: clean. EDR: no alert.", active: true, danger: true },
+      { text: "7 months pass. Nobody notices.", active: false }
+    ],
+    context: "The attacker is invisible to CPU-side tools",
+    nextLabel: "Detection fires →",
+    viz: "miner_running"
+  },
+  {
+    act: 1,
+    storyTitle: "GPU telemetry catches it",
+    storyBody: "A <strong>simple monitoring script reads nvidia-smi output</strong>. On poll 4 — utilization spikes, a second process appears, memory is 60% higher than baseline. <strong>Alert fires. The attack is caught.</strong>",
+    steps: [
+      { text: "nvidia-smi polling every 5 seconds", done: true },
+      { text: "Polls 1–3: normal baseline", done: true },
+      { text: "Poll 4: anomaly detected", active: true, danger: true },
+      { text: "Alert fired. Attacker found.", active: true, danger: false }
+    ],
+    context: "The data was always there. Nobody was collecting it.",
+    nextLabel: "Act 2 — GPU Snooping →",
+    viz: "alert_crypto"
+  },
+  // ── ACT 2: GPU SNOOPING ──────────────────────────────────────────
+  {
+    act: 2,
+    storyTitle: "Two workloads share a GPU",
+    storyBody: "In a <strong>shared cloud GPU environment</strong>, multiple customers run on the same hardware. Each workload gets a slice of GPU memory. They should be isolated. <strong>They are not.</strong>",
+    steps: [
+      { text: "Your AI workload — processing PII", active: true },
+      { text: "Neighbour workload — appears legitimate", active: false },
+      { text: "Memory buffers — shared hardware", active: false }
+    ],
+    context: "Act 2 of 2 — GPU Snooping",
+    nextLabel: "Attacker moves in →",
+    viz: "two_workloads"
+  },
+  {
+    act: 2,
+    storyTitle: "Attacker reads your memory",
+    storyBody: "The attacker's workload allocates memory <strong>adjacent to your workload's buffers</strong>. It begins reading fragments — model activations, customer PII, embeddings — cycling through GPU memory next door.",
+    steps: [
+      { text: "Your AI workload running", done: true },
+      { text: "Attacker allocates adjacent memory", done: true },
+      { text: "Reading your memory fragments", active: true, danger: true },
+      { text: "PII, model weights leaking silently", active: false }
+    ],
+    context: "No exploit needed. Just proximity.",
+    nextLabel: "See what leaks →",
+    viz: "snooping"
+  },
+  {
+    act: 2,
+    storyTitle: "What leaked — and how to detect it",
+    storyBody: "<strong>Customer PII and model activations leaked</strong> through shared GPU memory buffers. Detection: monitor for <strong>unexpected cross-workload memory access patterns</strong> using CUPTI instrumentation.",
+    steps: [
+      { text: "Memory boundary violation detected", active: true, danger: true },
+      { text: "Anomalous access patterns flagged", active: true, danger: true },
+      { text: "Workload isolated — forensics captured", active: false },
+      { text: "Dedicated GPU instances prevent this", active: false }
+    ],
+    context: "The fix: dedicated GPU instances + CUPTI monitoring",
+    nextLabel: "Finish demo ✓",
+    viz: "alert_snoop"
+  }
+];
+
+let current = 0;
+
+function buildDots() {
+  const el = document.getElementById('stepDots');
+  el.innerHTML = '';
+  STEPS.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'step-dot' + (i < current ? ' done' : i === current ? ' active' : '');
+    el.appendChild(d);
+  });
+  document.getElementById('stepLabel').textContent = `Step ${current + 1} of ${STEPS.length}`;
+}
+
+function buildStory(s) {
+  const panel = document.getElementById('storyPanel');
+  panel.innerHTML = '';
+
+  const badge = document.createElement('div');
+  badge.className = `act-badge act${s.act}`;
+  badge.textContent = s.act === 1 ? '⚡ Act 1 — Cryptomining' : '👁 Act 2 — GPU Snooping';
+  panel.appendChild(badge);
+
+  const title = document.createElement('div');
+  title.className = 'story-title fade-in';
+  title.innerHTML = s.storyTitle;
+  panel.appendChild(title);
+
+  const body = document.createElement('div');
+  body.className = 'story-body fade-in';
+  body.innerHTML = s.storyBody;
+  panel.appendChild(body);
+
+  const stepList = document.createElement('div');
+  stepList.className = 'step-list';
+  s.steps.forEach((step, i) => {
+    const item = document.createElement('div');
+    item.className = 'step-item' + (step.done ? ' done' : step.active ? (step.danger ? ' danger' : ' active') : '');
+    item.innerHTML = `<div class="step-num">${step.done ? '✓' : i + 1}</div><div class="step-text">${step.text}</div>`;
+    stepList.appendChild(item);
+  });
+  panel.appendChild(stepList);
+}
+
+function buildViz(type) {
+  const panel = document.getElementById('vizPanel');
+  panel.innerHTML = '';
+
+  if (type === 'normal') {
+    panel.innerHTML = `
+      ${utilBar(63, 'safe')}
+      ${processTable([
+        { name: 'inference_job.py', pid: '14821', util: '63%', mem: '4,821 MiB', cls: 'normal' }
+      ])}
+      ${monitorGrid('63%','green','1','green','4,821 MiB','green','CLEAN','green')}
+    `;
+  } else if (type === 'scanning') {
+    panel.innerHTML = `
+      ${utilBar(63, 'safe')}
+      ${processTable([
+        { name: 'inference_job.py', pid: '14821', util: '63%', mem: '4,821 MiB', cls: 'normal' }
+      ])}
+      <div class="monitor-card warn-card fade-in" style="margin-top:0">
+        <div class="mc-label">⚠ Threat intelligence</div>
+        <div style="font-size:13px;color:var(--orange);font-family:'JetBrains Mono',monospace;line-height:1.6">
+          CVE-2023-48022 · CVSS 9.8<br>
+          Ray Jobs API · No auth required<br>
+          <span style="color:var(--text2)">230,000 servers exposed globally</span>
+        </div>
+      </div>
+    `;
+  } else if (type === 'miner_appears') {
+    panel.innerHTML = `
+      ${utilBar(75, 'warn')}
+      ${processTable([
+        { name: 'inference_job.py', pid: '14821', util: '63%', mem: '4,821 MiB', cls: 'normal' },
+        { name: 'kworker/u8:2', pid: '29103', util: '12%', mem: '980 MiB', cls: 'rogue-cell', rowCls: 'rogue' }
+      ])}
+      <div style="font-size:12px;color:var(--red);font-family:'JetBrains Mono',monospace;padding:8px 12px;background:var(--red-dim);border-radius:8px;border:1px solid var(--red)" class="fade-in">
+        ⚡ New process appeared in GPU memory — disguised as Linux kernel worker
+      </div>
+    `;
+  } else if (type === 'miner_running') {
+    panel.innerHTML = `
+      ${utilBar(94, 'danger')}
+      ${processTable([
+        { name: 'inference_job.py', pid: '14821', util: '63%', mem: '4,821 MiB', cls: 'normal' },
+        { name: 'kworker/u8:2', pid: '29103', util: '31%', mem: '2,901 MiB', cls: 'rogue-cell', rowCls: 'rogue' }
+      ])}
+      <div class="cpu-blind show fade-in">
+        <div class="cpu-blind-title">CPU task manager — what security tools see</div>
+        <div class="cpu-blind-row"><span class="cpu-key">inference_job.py  PID 14821</span><span class="cpu-val">Running — normal</span></div>
+        <div class="cpu-blind-row"><span class="cpu-key">svchost.exe  PID 892</span><span class="cpu-val">Running — normal</span></div>
+        <div class="cpu-blind-row"><span class="cpu-key">EDR alert</span><span class="cpu-val">None</span></div>
+        <div class="cpu-blind-row"><span class="cpu-key">SIEM event</span><span class="cpu-val">None</span></div>
+      </div>
+    `;
+  } else if (type === 'alert_crypto') {
+    panel.innerHTML = `
+      ${utilBar(94, 'danger')}
+      <div class="alert-panel show fade-in">
+        <div class="alert-title">⚠ ANOMALY DETECTED — UNAUTHORIZED GPU PROCESS</div>
+        <div class="alert-grid">
+          <div class="alert-row"><span class="alert-key">Timestamp</span><span class="alert-val">2024-03-14 02:47:13</span></div>
+          <div class="alert-row"><span class="alert-key">GPU Utilization</span><span class="alert-val red">94% (baseline 63%)</span></div>
+          <div class="alert-row"><span class="alert-key">Rogue PID</span><span class="alert-val red">29103 → kworker/u8:2</span></div>
+          <div class="alert-row"><span class="alert-key">Memory spike</span><span class="alert-val red">+2,901 MiB above baseline</span></div>
+          <div class="alert-row"><span class="alert-key">CPU logs match</span><span class="alert-val red">None — host is blind</span></div>
+          <div class="alert-row"><span class="alert-key">Source tool</span><span class="alert-val">nvidia-smi + NVML</span></div>
+        </div>
+        <div class="alert-action">→ Action: isolate workload · capture VRAM snapshot · escalate to SOC</div>
+      </div>
+      <div style="padding:10px 14px;background:var(--bg2);border:1px solid var(--green);border-radius:8px;font-size:12px;color:var(--green);font-family:'JetBrains Mono',monospace" class="fade-in">
+        ✓ This alert came from nvidia-smi — already installed on your servers. The data was always there.
+      </div>
+    `;
+  } else if (type === 'two_workloads') {
+    panel.innerHTML = `
+      <div class="mem-map-wrap">
+        <div class="mem-map-header">
+          <div class="mem-map-title">GPU VRAM — shared memory map</div>
+          <div class="mem-legend">
+            <div class="mem-leg-item"><div class="mem-leg-dot" style="background:var(--blue)"></div>Your workload</div>
+            <div class="mem-leg-item"><div class="mem-leg-dot" style="background:var(--purple)"></div>Neighbour</div>
+            <div class="mem-leg-item"><div class="mem-leg-dot" style="background:var(--border)"></div>Free</div>
+          </div>
+        </div>
+        <div class="mem-grid" id="memGrid"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="monitor-card"><div class="mc-label">Your workload</div><div class="mc-val green" style="font-size:16px">inference_job.py</div><div class="mc-sub">Processing customer PII + model weights</div></div>
+        <div class="monitor-card"><div class="mc-label">Neighbour workload</div><div class="mc-val" style="font-size:16px;color:var(--purple)">tenant_job_7821</div><div class="mc-sub">Appears legitimate on sign-up</div></div>
+      </div>
+    `;
+    renderMemGrid('two_workloads');
+  } else if (type === 'snooping') {
+    panel.innerHTML = `
+      <div class="mem-map-wrap">
+        <div class="mem-map-header">
+          <div class="mem-map-title">GPU VRAM — snooping in progress</div>
+          <div class="mem-legend">
+            <div class="mem-leg-item"><div class="mem-leg-dot" style="background:var(--blue)"></div>Your workload</div>
+            <div class="mem-leg-item"><div class="mem-leg-dot" style="background:var(--purple)"></div>Attacker</div>
+            <div class="mem-leg-item"><div class="mem-leg-dot" style="background:var(--red)"></div>Being read</div>
+            <div class="mem-leg-item"><div class="mem-leg-dot" style="background:var(--orange)"></div>Stolen</div>
+          </div>
+        </div>
+        <div class="mem-grid" id="memGrid"></div>
+      </div>
+      <div style="font-size:12px;color:var(--red);font-family:'JetBrains Mono',monospace;padding:10px 14px;background:var(--red-dim);border:1px solid var(--red);border-radius:8px" class="fade-in">
+        ⚡ Attacker reading adjacent memory buffers — no exploit needed, just proximity
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="monitor-card alert-card"><div class="mc-label">Data leaking</div><div class="mc-val red" style="font-size:14px">Customer PII</div></div>
+        <div class="monitor-card alert-card"><div class="mc-label">Data leaking</div><div class="mc-val red" style="font-size:14px">Model weights</div></div>
+        <div class="monitor-card alert-card"><div class="mc-label">Data leaking</div><div class="mc-val red" style="font-size:14px">Embeddings</div></div>
+      </div>
+    `;
+    renderMemGrid('snooping');
+  } else if (type === 'alert_snoop') {
+    panel.innerHTML = `
+      <div class="alert-panel show fade-in">
+        <div class="alert-title">⚠ MEMORY BOUNDARY VIOLATION DETECTED</div>
+        <div class="alert-grid">
+          <div class="alert-row"><span class="alert-key">Timestamp</span><span class="alert-val">2024-03-14 03:12:44</span></div>
+          <div class="alert-row"><span class="alert-key">Violation type</span><span class="alert-val red">Cross-workload memory access</span></div>
+          <div class="alert-row"><span class="alert-key">Attacker tenant</span><span class="alert-val red">tenant_job_7821</span></div>
+          <div class="alert-row"><span class="alert-key">Data at risk</span><span class="alert-val red">PII · model weights · embeddings</span></div>
+          <div class="alert-row"><span class="alert-key">Detection tool</span><span class="alert-val">CUPTI kernel instrumentation</span></div>
+          <div class="alert-row"><span class="alert-key">CPU logs match</span><span class="alert-val red">None — host is blind</span></div>
+        </div>
+        <div class="alert-action">→ Action: terminate tenant · isolate GPU · dedicated instances for sensitive workloads</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="monitor-card" style="border-color:var(--orange)">
+          <div class="mc-label">Prevention</div>
+          <div style="font-size:12px;color:var(--orange);font-family:'JetBrains Mono',monospace;line-height:1.6">Dedicated GPU instances<br>eliminate shared memory risk</div>
+        </div>
+        <div class="monitor-card" style="border-color:var(--blue)">
+          <div class="mc-label">Detection</div>
+          <div style="font-size:12px;color:var(--blue);font-family:'JetBrains Mono',monospace;line-height:1.6">CUPTI monitors kernel-level<br>memory access patterns</div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+function utilBar(pct, cls) {
+  const color = cls === 'safe' ? 'var(--green)' : cls === 'warn' ? 'var(--orange)' : 'var(--red)';
+  return `
+    <div class="util-bar-wrap">
+      <div class="util-bar-header">
+        <div class="util-bar-title">GPU Utilization</div>
+        <div class="util-bar-pct" style="color:${color}">${pct}%</div>
+      </div>
+      <div class="util-track"><div class="util-fill ${cls}" style="width:${pct}%"></div></div>
+    </div>
+  `;
+}
+
+function processTable(rows) {
+  let html = `<div class="process-table">
+    <div class="pt-header">
+      <div class="pt-col">Process</div>
+      <div class="pt-col">PID</div>
+      <div class="pt-col">GPU Util</div>
+      <div class="pt-col">Mem Used</div>
+    </div>`;
+  rows.forEach(r => {
+    html += `<div class="pt-row ${r.rowCls || ''}">
+      <div class="pt-cell ${r.cls}">${r.name}</div>
+      <div class="pt-cell dim">${r.pid}</div>
+      <div class="pt-cell ${r.cls}">${r.util}</div>
+      <div class="pt-cell ${r.cls}">${r.mem}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function monitorGrid(util, uc, procs, pc, mem, mc, status, sc) {
+  return `<div class="monitor-grid">
+    <div class="monitor-card"><div class="mc-label">GPU Utilization</div><div class="mc-val ${uc}">${util}</div><div class="mc-sub">baseline: 60–70%</div></div>
+    <div class="monitor-card"><div class="mc-label">Active Processes</div><div class="mc-val ${pc}">${procs}</div><div class="mc-sub">authorized: 1</div></div>
+    <div class="monitor-card"><div class="mc-label">Memory Used</div><div class="mc-val ${mc}">${mem}</div><div class="mc-sub">total: 8,192 MiB</div></div>
+    <div class="monitor-card"><div class="mc-label">Security Status</div><div class="mc-val ${sc}" style="font-size:18px">${status}</div><div class="mc-sub">EDR: no GPU visibility</div></div>
+  </div>`;
+}
+
+function renderMemGrid(type) {
+  setTimeout(() => {
+    const grid = document.getElementById('memGrid');
+    if (!grid) return;
+    const cells = [];
+    for (let i = 0; i < 80; i++) {
+      let cls = 'free';
+      if (type === 'two_workloads') {
+        if (i < 32) cls = 'workload-a';
+        else if (i < 56) cls = 'workload-b';
+      } else if (type === 'snooping') {
+        if (i < 32) cls = i >= 26 ? 'snooping' : 'workload-a';
+        else if (i < 56) cls = i < 38 ? 'stolen' : 'workload-b';
+      }
+      cells.push(cls);
+    }
+    grid.innerHTML = cells.map(c => `<div class="mem-cell ${c}"></div>`).join('');
+  }, 50);
+}
+
+function render() {
+  const s = STEPS[current];
+  buildDots();
+  buildStory(s);
+  buildViz(s.viz);
+  document.getElementById('navContext').innerHTML = `<strong>${s.context}</strong>`;
+  document.getElementById('nextBtn').textContent = s.nextLabel;
+  document.getElementById('nextBtn').disabled = current === STEPS.length - 1;
+  document.getElementById('prevBtn').disabled = current === 0;
+}
+
+function navigate(dir) {
+  current = Math.max(0, Math.min(STEPS.length - 1, current + dir));
+  render();
+}
+
+function reset() {
+  current = 0;
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
